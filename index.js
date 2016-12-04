@@ -1,5 +1,5 @@
 var os = require("os");
-const net = require("net");
+var net = require("net");
 var cp = require("child_process");
 var fs = require("fs");
 var cluster = require("cluster");
@@ -21,7 +21,7 @@ if (cluster.isWorker) {
         console.log("Restarting");
         process.exit();
     }
-    let args = process.argv.slice(2);
+    var args = process.argv.slice(2);
     var host = "localhost";
     if (args.length) {
         host = args[0];
@@ -31,17 +31,22 @@ if (cluster.isWorker) {
     if (!settings) {
         settings = {
             device: "NRF52832_XXAA",
-            core: "Cortex-M4"
+            core: "Cortex-M4",
+            debug: true,
         };
     }
     console.log(settings);
     var socket = io.connect("http://" + host + ":3000");
     var jLinkProc;
     var jLinkAction = null;
-    function writeToJLink(lines) {
+    function writeToJLink(lines, cb) {
+        if (cb === void 0) { cb = null; }
         (function iter(i) {
-            if (i >= lines.length)
+            if (i >= lines.length) {
+                if (cb)
+                    cb();
                 return;
+            }
             console.log("EXEC: ", lines[i]);
             jLinkProc.stdin.write(lines[i] + "\n", "utf8", function () {
                 setTimeout(function () {
@@ -113,6 +118,7 @@ if (cluster.isWorker) {
             "w4 4001e504 2",
             "w4 4001e50c 1",
             "sleep 100",
+            "w4 4001e504 1",
             "r",
             "exit",
         ]);
@@ -122,6 +128,8 @@ if (cluster.isWorker) {
         settings.app = d.app;
         settings.board = d.board;
         settings.cflags = d.cflags;
+        settings.debug = d.debug;
+        console.log(d);
         storage.setItemSync("settings", settings);
         fs.writeFileSync(tmpFile, d.hex);
         writeToJLink([
@@ -130,7 +138,9 @@ if (cluster.isWorker) {
             "r",
             "g",
             "exit",
-        ]);
+        ], function () {
+            fs.unlinkSync(tmpFile);
+        });
     });
     socket.on("flashSoftDevice", function (d) {
         var tmpFile = tmp.fileSync({ postfix: ".hex" }).name;
@@ -145,23 +155,26 @@ if (cluster.isWorker) {
             "r",
             "g",
             "exit",
-        ]);
+        ], function () {
+            fs.unlinkSync(tmpFile);
+        });
     });
     function createRTTConnection(host, port) {
         (function init() {
-            let conn = net.createConnection({ host: host, port: port }, function () {
+            var conn = net.createConnection({ host: host, port: port }, function () {
                 console.log("Connected to " + host + ":" + port);
             });
-            conn.on("error", () => {
+            conn.on("error", function () {
             });
             conn.on("data", function (data) {
+                process.stdout.write(data.toString());
+                // console.log(Date.now() + ": " + data.toString().trim());
                 socket.emit("rtt", data.toString());
             });
             conn.on("close", function () {
-                setTimeout(init, 1000);
+                setTimeout(init, 300);
             });
         })();
     }
     createRTTConnection("localhost", 19021);
 }
-//# sourceMappingURL=index.js.map
