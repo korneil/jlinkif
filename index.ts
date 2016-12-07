@@ -32,6 +32,10 @@ if (cluster.isWorker) {
         host = args[0];
     }
 
+    if (args.indexOf("gdb") == -1) {
+        runJLink();
+    }
+
     storage.initSync({dir: "tmp/" + os.hostname()});
     var settings = storage.getItemSync("settings");
     if (!settings) {
@@ -75,7 +79,7 @@ if (cluster.isWorker) {
     }
 
 
-    (function runJLink() {
+    function runJLink() {
         jLinkProc = cp.spawn("JLinkExe", ["-device", settings.device, "-speed", "4000", "-if", "SWD", "-autoconnect", "1"]);
         jLinkProc.stdout.setEncoding("utf8");
         jLinkProc.stderr.setEncoding("utf8");
@@ -110,7 +114,7 @@ if (cluster.isWorker) {
             console.log("JLINK closed");
             runJLink();
         });
-    })();
+    }
 
     socket.on("connect", function () {
         socket.emit("node", {hostname: os.hostname()});
