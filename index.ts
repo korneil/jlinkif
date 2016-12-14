@@ -234,8 +234,8 @@ if (cluster.isWorker) {
                         let file = desc[3];
                         let fncDesc = file + ":" + info[2] + " <" + info[3] + ">";
 
-                        maxFncLen = Math.max(fncDesc.length, maxFncLen);
-                        maxModuleLen = Math.max(module.length, maxModuleLen);
+                        maxFncLen = Math.max(Math.min(fncDesc.length, 30), maxFncLen);
+                        maxModuleLen = Math.max(Math.min(module.length, 8), maxModuleLen);
 
                         process.stdout.write("IRQ:" + ralign(info[4], 2) + " ");
 

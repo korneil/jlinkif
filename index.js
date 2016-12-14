@@ -207,8 +207,8 @@ if (cluster.isWorker) {
                         var module_1 = desc[2] ? desc[2] : "";
                         var file = desc[3];
                         var fncDesc = file + ":" + info[2] + " <" + info[3] + ">";
-                        maxFncLen_1 = Math.max(fncDesc.length, maxFncLen_1);
-                        maxModuleLen_1 = Math.max(module_1.length, maxModuleLen_1);
+                        maxFncLen_1 = Math.max(Math.min(fncDesc.length, 30), maxFncLen_1);
+                        maxModuleLen_1 = Math.max(Math.min(module_1.length, 8), maxModuleLen_1);
                         process.stdout.write("IRQ:" + ralign(info[4], 2) + " ");
                         output += ralign(module_1, maxModuleLen_1) + " ";
                         output += lalign(fncDesc, maxFncLen_1) + " ";
