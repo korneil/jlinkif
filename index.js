@@ -14,6 +14,8 @@ if (cluster.isWorker) {
         var io = require("socket.io-client");
         var tmp = require("tmp");
         var storage = require("node-persist");
+        var moment = require("moment");
+        var colors = require("colors");
     }
     catch (e) {
         console.log("Installing modules");
@@ -162,7 +164,24 @@ if (cluster.isWorker) {
             fs.unlinkSync(tmpFile);
         });
     });
+    function ralign(x, l) {
+        var r = "";
+        for (var i = 0; i < l - x.length; i++)
+            r += " ";
+        r += x;
+        return r;
+    }
+    function lalign(x, l) {
+        var r = x;
+        for (var i = 0; i < l - x.length; i++)
+            r += " ";
+        return r;
+    }
+    var maxFncLen_1 = 20;
+    var maxModuleLen_1 = 4;
     function createRTTConnection(host, port) {
+        var buffer = "";
+        var currentTime = "";
         (function init() {
             var conn = net.createConnection({ host: host, port: port }, function () {
                 console.log("Connected to " + host + ":" + port);
@@ -170,8 +189,55 @@ if (cluster.isWorker) {
             conn.on("error", function () {
             });
             conn.on("data", function (data) {
-                process.stdout.write(data.toString());
-                // console.log(Date.now() + ": " + data.toString().trim());
+                if (buffer == "")
+                    currentTime = moment().format("DD/MM/YY HH:mm:ss.SSS");
+                buffer += data.toString();
+                while (true) {
+                    var pos = buffer.indexOf("\n");
+                    if (pos == -1)
+                        break;
+                    var line = buffer.substr(0, pos);
+                    process.stdout.write(colors.gray(currentTime + ": "));
+                    // var rttEntry = {};
+                    var info = line.match(/^(.*?):(\d+) <(.*?)> \(IRQ:(\d+?)\) @ (\d+): /);
+                    if (info) {
+                        var output = "";
+                        var desc = info[1].match(/^(?:\[(\d)(?:,(.*?))?])?(.*)/);
+                        var code = parseInt(desc[1]);
+                        var module_1 = desc[2] ? desc[2] : "";
+                        var file = desc[3];
+                        var fncDesc = file + ":" + info[2] + " <" + info[3] + ">";
+                        maxFncLen_1 = Math.max(fncDesc.length, maxFncLen_1);
+                        maxModuleLen_1 = Math.max(module_1.length, maxModuleLen_1);
+                        process.stdout.write("IRQ:" + ralign(info[4], 2) + " ");
+                        output += ralign(module_1, maxModuleLen_1) + " ";
+                        output += lalign(fncDesc, maxFncLen_1) + " ";
+                        output += line.substr(info[0].length);
+                        var color = void 0;
+                        switch (code) {
+                            case 9:
+                                color = colors.green;
+                                break;
+                            case 2:
+                                color = colors.red;
+                                break;
+                            case 1:
+                                color = colors.yellow;
+                                break;
+                            case 0:
+                                color = colors.white;
+                                break;
+                            default:
+                                color = colors.white;
+                        }
+                        process.stdout.write(color(output));
+                    }
+                    else {
+                        process.stdout.write(line);
+                    }
+                    process.stdout.write("\n");
+                    buffer = buffer.substr(pos + 1);
+                }
                 socket.emit("rtt", data.toString());
             });
             conn.on("close", function () {

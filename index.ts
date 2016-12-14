@@ -17,6 +17,8 @@ if (cluster.isWorker) {
         var io = require("socket.io-client");
         var tmp = require("tmp");
         var storage = require("node-persist");
+        var moment = require("moment");
+        var colors = require("colors");
     } catch (e) {
         console.log("Installing modules");
         cp.execSync("npm i", {stdio: [0, 1, 2]});
@@ -186,7 +188,26 @@ if (cluster.isWorker) {
         });
     });
 
+    function ralign(x, l) {
+        let r = "";
+        for (let i = 0; i < l - x.length; i++) r += " ";
+        r += x;
+        return r;
+    }
+
+    function lalign(x, l) {
+        let r = x;
+        for (let i = 0; i < l - x.length; i++) r += " ";
+        return r;
+    }
+
+    let maxFncLen = 20;
+    let maxModuleLen = 4;
+
     function createRTTConnection(host: string, port: number) {
+        let buffer = "";
+        let currentTime = "";
+
         (function init() {
             let conn = net.createConnection({host: host, port: port}, function () {
                 console.log("Connected to " + host + ":" + port);
@@ -194,8 +215,66 @@ if (cluster.isWorker) {
             conn.on("error", () => {
             });
             conn.on("data", function (data) {
-                process.stdout.write(data.toString());
-                // console.log(Date.now() + ": " + data.toString().trim());
+                if (buffer == "") currentTime = moment().format("DD/MM/YY HH:mm:ss.SSS");
+                buffer += data.toString();
+                while (true) {
+                    let pos = buffer.indexOf("\n");
+                    if (pos == -1) break;
+                    let line = buffer.substr(0, pos);
+
+                    process.stdout.write(colors.gray(currentTime + ": "));
+
+                    // var rttEntry = {};
+                    let info = line.match(/^(.*?):(\d+) <(.*?)> \(IRQ:(\d+?)\) @ (\d+): /);
+                    if (info) {
+                        let output = "";
+                        let desc = info[1].match(/^(?:\[(\d)(?:,(.*?))?])?(.*)/);
+                        let code = parseInt(desc[1]);
+                        let module = desc[2] ? desc[2] : "";
+                        let file = desc[3];
+                        let fncDesc = file + ":" + info[2] + " <" + info[3] + ">";
+
+                        maxFncLen = Math.max(fncDesc.length, maxFncLen);
+                        maxModuleLen = Math.max(module.length, maxModuleLen);
+
+                        process.stdout.write("IRQ:" + ralign(info[4], 2) + " ");
+
+                        output += ralign(module, maxModuleLen) + " ";
+                        output += lalign(fncDesc, maxFncLen) + " ";
+                        output += line.substr(info[0].length);
+
+                        let color;
+                        switch (code) {
+                            case 9:
+                                color = colors.green;
+                                break;
+                            case 2:
+                                color = colors.red;
+                                break;
+                            case 1:
+                                color = colors.yellow;
+                                break;
+                            case 0:
+                                color = colors.white;
+                                break;
+                            default:
+                                color = colors.white;
+                        }
+                        process.stdout.write(color(output));
+                        //     rttEntry.fnc = info[3];
+                        //     rttEntry.irq = info[4];
+                        //     rttEntry.timeDelta = info[5];
+                        //     line = line.substr(info[0].length);
+                    } else {
+                        process.stdout.write(line);
+                    }
+
+                    process.stdout.write("\n");
+
+
+                    buffer = buffer.substr(pos + 1);
+                }
+
                 socket.emit("rtt", data.toString());
             });
             conn.on("close", function () {
