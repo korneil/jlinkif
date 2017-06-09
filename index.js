@@ -225,7 +225,7 @@ if (cluster.isWorker) {
                                 color = colors.yellow;
                                 break;
                             case 0:
-                                color = colors.white;
+                                color = colors.cyan;
                                 break;
                             default:
                                 color = colors.white;
