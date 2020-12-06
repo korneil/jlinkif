@@ -41,7 +41,7 @@ func (x *ctx) runGDBServer() {
 
 			prevPid = 0
 
-			cmd := exec.CommandContext(x.context, "JLinkGDBServer", "-if", "SWD", "-device", "NRF52")
+			cmd := exec.CommandContext(x.context, "JLinkGDBServer", "-nogui", "-if", "SWD", "-device", "NRF52")
 			// prevent ctrl+c killing the gdb server
 			cmd.SysProcAttr = &syscall.SysProcAttr{
 				Setpgid: true,

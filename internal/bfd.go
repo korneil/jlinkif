@@ -104,6 +104,7 @@ func Debug(ctx context.Context, root string) (err error) {
 		"build/zephyr/zephyr.elf",
 		"--nx", "-q", "--ix", f.Name(),
 		"-ex", "target remote :2331",
+		"-ex", "mon speed 1000",
 		"-ex", "monitor halt",
 		"-ex", "monitor reset",
 		"-ex", "load",
