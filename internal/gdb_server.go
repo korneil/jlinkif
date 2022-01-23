@@ -2,34 +2,48 @@ package internal
 
 import (
 	"bytes"
-	"github.com/mingrammer/cfmt"
-	"github.com/mitchellh/go-ps"
+	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/mingrammer/cfmt"
+	"github.com/mitchellh/go-ps"
 )
 
-func isGDBRunning() ps.Process {
+func (x *Context) isGDBRunning() ps.Process {
 	procs, err := ps.Processes()
 	if err != nil {
 		panic(err)
 	}
 
 	for _, p := range procs {
-		if strings.HasPrefix(p.Executable(), "JLinkGDBServer") {
+		if strings.HasPrefix(p.Executable(), x.Config.GDB.Exec) {
 			return p
 		}
 	}
 	return nil
 }
 
-func (x *ctx) runGDBServer() {
+func (x *Context) RunGDBServer() {
+	var cmd *exec.Cmd
 	prevPid := 0
 	x.wg.Add(1)
 	go func() {
+		<-x.context.Done()
+		if cmd != nil {
+			cfmt.Infof("Gracefully shutting down GDB server\n")
+			cmd.Process.Signal(os.Interrupt)
+		}
+	}()
+
+	go func() {
+		errBuf := bytes.Buffer{}
+
 		for x.context.Err() == nil {
-			p := isGDBRunning()
+			p := x.isGDBRunning()
 			if p != nil {
 				if prevPid != p.Pid() {
 					prevPid = p.Pid()
@@ -38,35 +52,40 @@ func (x *ctx) runGDBServer() {
 				time.Sleep(time.Second)
 				continue
 			}
-
 			prevPid = 0
 
-			cmd := exec.CommandContext(x.context, "JLinkGDBServer", "-nogui", "-if", "SWD", "-device", "NRF52")
-			// prevent ctrl+c killing the gdb server
-			cmd.SysProcAttr = &syscall.SysProcAttr{
-				Setpgid: true,
-			}
+			errBuf.Reset()
 
-			errBuf := bytes.Buffer{}
+			cmd = exec.Command(x.Config.GDB.Exec, x.Config.GDB.Args...)
+			cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // prevent ctrl+c killing the gdb server
 			cmd.Stderr = &errBuf
-			err := cmd.Start()
-			cfmt.Warningf("Starting GDB server (pid %d)\n", cmd.Process.Pid)
-			if err == nil {
-				err = cmd.Wait()
-				if x.context.Err() != nil {
-					break
-				}
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stdout
+			if err := cmd.Start(); err != nil {
+				fmt.Printf("err: %+v\n", err)
+				time.Sleep(time.Second)
+				cmd = nil
+				continue
 			}
-			if err != nil {
+			cfmt.Warningf("Starting GDB server (pid %d)\n", cmd.Process.Pid)
+			// x.gdbServerStarted <- true
+			if err := cmd.Wait(); err != nil {
 				errLines := strings.Split(errBuf.String(), "\n")
 				for i, line := range errLines {
 					errLines[i] = "    " + line
 				}
 				cfmt.Errorf("GDB server: %v:\n%s\n", err, strings.Join(errLines, "\n"))
+				time.Sleep(time.Second)
 			}
 
-			time.Sleep(time.Second)
+			cmd = nil
 		}
+
+		if cmd != nil {
+			fmt.Printf("Killing GDB\n")
+			cmd.Process.Kill()
+		}
+
 		x.wg.Done()
 	}()
 }

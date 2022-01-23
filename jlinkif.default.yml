@@ -1,0 +1,12 @@
+symbol_file: build/zephyr/zephyr.elf
+load: build/zephyr/app_signed.hex | build/zephyr/zephyr.elf
+root: .
+watch:
+    exclude: []
+    include: []
+gdb:
+    run: true
+    exec: JLinkGDBServer
+    args: ["-nogui", "-if", "SWD", "-device", "NRF52"]
+rtt:
+    address: ":19021"

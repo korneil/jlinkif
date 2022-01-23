@@ -2,11 +2,12 @@ package internal
 
 import (
 	"fmt"
-	"github.com/logrusorgru/aurora"
-	"github.com/mingrammer/cfmt"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/logrusorgru/aurora"
+	"github.com/mingrammer/cfmt"
 )
 
 var jlinkHeaderRE = []*regexp.Regexp{
@@ -36,11 +37,13 @@ func NewEntry() (x *entry) {
 	return
 }
 
-var logLineDateRE = regexp.MustCompile(`^\[(\d{2}:\d{2}:\d{2}.\d{3},\d{3})\]`)
-var logLineLevelRE = regexp.MustCompile(`^<(inf|dbg|err|wrn)>`)
-var logLineAppRE = regexp.MustCompile(`^[\w]+`)
-var logLineFncRE = regexp.MustCompile(`^[\w]+`)
-var logLineDumpRE = regexp.MustCompile(`^((?:(?:[0-9a-f]{2}\s)+)\s(?:(?:[0-9a-f]{2}\s|\s)*)|\s+)\|(.*)$`)
+var (
+	logLineDateRE  = regexp.MustCompile(`^\[(\d{2}:\d{2}:\d{2}.\d{3},\d{3})\]`)
+	logLineLevelRE = regexp.MustCompile(`^<(inf|dbg|err|wrn)>`)
+	logLineAppRE   = regexp.MustCompile(`^[\w]+`)
+	logLineFncRE   = regexp.MustCompile(`^[\w]+`)
+	logLineDumpRE  = regexp.MustCompile(`^((?:(?:[0-9a-f]{2}\s)+)\s(?:(?:[0-9a-f]{2}\s|\s)*)|\s+)\|(.*)$`)
+)
 
 var logLeveFormatSettings = map[string]*logVisualSetting{
 	"":    {indicator: " ", indicatorColor: 252, msgColor: 252},
@@ -108,6 +111,7 @@ func (x *entry) Write(line string) {
 			x.Level = ""
 		}
 
+		x.Fnc = ""
 		if x.App = logLineAppRE.FindString(line); len(x.App) > 0 {
 			isDot := len(line) > len(x.App) && line[len(x.App)] == '.'
 
@@ -115,8 +119,6 @@ func (x *entry) Write(line string) {
 			if isDot {
 				if x.Fnc = logLineFncRE.FindString(line); len(x.Fnc) > 0 {
 					line = trimPlusOne(line, len(x.Fnc))
-				} else {
-					x.Fnc = ""
 				}
 			}
 		} else {
@@ -158,12 +160,12 @@ func (x *entry) writeHeader(b *strings.Builder) {
 	}
 }
 
-func (x *ctx) RunRTTReader() {
+func (x *Context) RunRTTReader() {
 	x.wg.Add(1)
 	go func() {
 		defer x.wg.Done()
 
-		r := NewRTT(x.context, ":19021")
+		r := NewRTT(x.context, x.Config.RTT.Address)
 		defer r.Close()
 
 		jlinkHeaderLines := make([]string, len(jlinkHeaderRE))
@@ -176,8 +178,11 @@ func (x *ctx) RunRTTReader() {
 		for x.context.Err() == nil {
 			select {
 			case <-x.context.Done():
-				break
+				return
 			case d := <-r.data:
+				if len(d) == 0 {
+					continue
+				}
 				if d[0] == 13 { // strip \r if it is the first byte
 					d = d[1:]
 				}
@@ -195,10 +200,7 @@ func (x *ctx) RunRTTReader() {
 					}
 					continue
 				} else if jlinkHeaderState != 0 {
-					x.mu.Lock()
-					p := x.rttPrint
-					x.mu.Unlock()
-					if p {
+					if x.rttPrint.IsSet() {
 						for i := 0; i < jlinkHeaderState-1; i++ {
 							entry.Write(jlinkHeaderLines[i])
 						}
@@ -206,10 +208,7 @@ func (x *ctx) RunRTTReader() {
 					jlinkHeaderState = 0
 				}
 
-				x.mu.Lock()
-				p := x.rttPrint
-				x.mu.Unlock()
-				if p {
+				if x.rttPrint.IsSet() {
 					entry.Write(line)
 				}
 			}
