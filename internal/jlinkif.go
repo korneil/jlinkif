@@ -54,7 +54,9 @@ func Init(x *Context) (err error) {
 	x.signals = make(chan os.Signal, 2)
 	x.triggerBuild = make(chan bool, 2)
 
-	x.Config.Watch.Include = append([]string{x.Config.Root}, x.Config.Watch.Include...)
+	if len(x.Config.Watch.Include) == 0 {
+		x.Config.Watch.Include = append([]string{x.Config.Root}, x.Config.Watch.Include...)
+	}
 	x.watcher.CloseOnUserInterrupt = false
 	x.watcher.Config = x.Config.Watch
 	if err = x.watcher.Init(); err != nil {

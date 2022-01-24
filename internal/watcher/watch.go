@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/mingrammer/cfmt"
 )
 
 type Config struct {
@@ -98,7 +99,7 @@ func (ctx *Context) Start() (err error) {
 					return
 				}
 				if event.Op != fsnotify.Chmod {
-					// fmt.Printf("changed %s\n", event.Name)
+					cfmt.Infof("Changed %s\n", event.Name)
 					if !ctx.IsExcluded(event.Name) {
 						ctx.Changed <- event.Name
 					}
